@@ -3,13 +3,18 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile
+      args:
+        WWWUSER: '${WWWUSER}'
+        WWWGROUP: '${WWWGROUP}'
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
     volumes:
       - .:/var/www/html
+      - ./docker/php.ini:/usr/local/etc/php/conf.d/99-overrides.ini
     networks:
       - laravel-network
     depends_on:
       - mysql
-
   web-server:
     image: nginx:alpine
     ports:
