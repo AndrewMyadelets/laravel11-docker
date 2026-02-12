@@ -1,28 +1,53 @@
 #!/bin/bash
 
-# Firewall configuration
-echo "🔐 Configuring Firewall..."
-NETWORK_NAME="laravel_laravel-network"
-SUBNET=$(docker network inspect "$NETWORK_NAME" -f '{{range .IPAM.Config}}{{.Subnet}}{{end}}')
+#!/bin/bash
+
+# 1. Load variables from .env
+if [ -f .env ]; then
+    set -a
+    source .env
+    set +a
+else
+    echo "ERROR: .env file not found."
+    exit 1
+fi
+
+# 2. Identify the network name dynamically
+NETWORK_SUFFIX="_${DOCKER_NETWORK}"
+FULL_NETWORK_NAME=$(docker network ls --format "{{.Name}}" | grep "${NETWORK_SUFFIX}$" | head -n 1)
+
+echo "Searching for suffix: $NETWORK_SUFFIX"
+echo "Found Network: $FULL_NETWORK_NAME"
+
+# 3. Check if network was found
+if [ -z "$FULL_NETWORK_NAME" ]; then
+    echo "ERROR: Network ending with '$NETWORK_SUFFIX' not found."
+    echo "Please run: docker compose up -d"
+    exit 1
+fi
+
+# 4. Get the Subnet and configure UFW
+SUBNET=$(docker network inspect "$FULL_NETWORK_NAME" -f '{{range .IPAM.Config}}{{.Subnet}}{{end}}' 2>/dev/null)
 
 if [ -z "$SUBNET" ]; then
-    echo "❌ Error: Network '$NETWORK_NAME' not found."
+    echo "ERROR: Network '$FULL_NETWORK_NAME' not found."
+    echo "Please run: docker compose up -d"
     exit 1
 fi
 
 sudo ufw allow from "$SUBNET" to any port 9003 proto tcp
-echo "✅ Xdebug access granted ($SUBNET -> 9003)"
+echo "SUCCESS: Xdebug access granted ($SUBNET -> 9003)"
 
-# Adding aliases to .bashrc (only if they don't exist)
-echo "✍️ Checking aliases in ~/.bashrc..."
+# 5. Adding aliases to .bashrc
+echo "Checking aliases..."
 
 add_alias_if_not_exists() {
     local alias_line="$1"
     if ! grep -qF "$alias_line" ~/.bashrc; then
         echo "$alias_line" >> ~/.bashrc
-        echo "➕ Added: $alias_line"
+        echo "ADDED: $alias_line"
     else
-        echo "🔘 Already exists: $alias_line"
+        echo "EXISTS: $alias_line"
     fi
 }
 
@@ -30,6 +55,5 @@ add_alias_if_not_exists "alias dcel='docker compose exec laravel'"
 add_alias_if_not_exists "alias pa='docker compose exec laravel php artisan'"
 
 echo "----------------------------------------------------"
-echo "🎉 Setup complete!"
-echo "⚠️ To activate aliases in this window, run: source ~/.bashrc"
-echo "Or just open a new terminal tab."
+echo "Setup complete!"
+echo "Run 'source ~/.bashrc' to activate aliases."
